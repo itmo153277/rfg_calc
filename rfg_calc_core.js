@@ -241,16 +241,16 @@ var rfg_calc = {};
 					каждой из учитываемых встреч:
 				K_дин = max{10, S* / [(S* / S)^2 + D_b]}.
 			В коэффициент динамичности входят:
-			S - текущее отклонение рейтинга игрока (перед турниром, с учетом коррекции
-				по времени неучастия, см. п.1), 
-			S* - максимальное отклонение,
+				S - текущее отклонение рейтинга игрока (перед турниром, с учетом коррекции
+					по времени неучастия, см. п.1), 
+				S* - максимальное отклонение,
 			а также дисперсия результатов
 				D_b = sum{j=1..N, B^2_j · p_j · (1 - p_j)},
 			где
 				N - число учитываемых партий игрока, 
 				B_j – коэффициент неопределенности рейтинга j-того соперника: 
 					1 / B^2_j = 1 + 3 · [S_j / (3.141593 · S*_j)]^2, 
-				pj = P(DRj, Dj) - прогнозы результатов (условные априорные математические
+				p_j = P(DR_j, D_j) - прогнозы результатов (условные априорные математические
 					ожидания набираемых турнирных очков): 
 					P(DR, D) = max{0, min {1, 0.5 + DR / D}}; 
 				DR_j = B_j · (R - R_j + H_j) - разница в рейтингах с учетом неопределенности
@@ -264,11 +264,11 @@ var rfg_calc = {};
 					D^2_j = 0.5 · [(3000 - R)^2 + (3000 - R_j)^2].
 			Разница набранных и ожидаемых очков (DN) также учитывает неопределенность рейтингов и
 			имеет вид:
-				DN = sim{j=1..N, B_j · (r_j - p_j)},
+				DN = sum{j=1..N, B_j · (r_j - p_j)},
 			где
 				rj - результаты партий (0 - поражение, 1 – победа, 0.5 - ничья).
 			*/
-			"getProbability": function(DR, D) {
+			"getExpect": function(DR, D) {
 				var p = 0.5 + DR / D;
 				if (p > 1)
 					return 1;
@@ -278,31 +278,31 @@ var rfg_calc = {};
 					return p;
 			},
 			"calculateRating_Normal": function(player, tournament) {
-				var ResC, Disp = 0, DN = 0;
+				var Disp = 0, DN = 0;
+				player.gamesAmount = 0;
 				for (var i = 0; i < player.opponents.length; i++) {
 					var opobj = player.opponents[i];
-					if (opobj.NoGame)
+					if (!opobj.hasOwnProperty("playerIndex"))
 						continue;
 					var opponent = tournament.players[opobj.playerIndex];
 					opobj.CBsq = 1 / (1 + 3 * Math.pow(opponent.Dev0 / 3.141593 / opponent.MaxDev,
 						2));
 					opobj.CB = Math.sqrt(opobj.CBsq);
-					opobj.prob = this.getProbability(opobj.CB * opobj.DR, opobj.DSR)
-					Disp += opobj.CBsq * opobj.prob * (1 - opobj.prob);
-					if (opobj.res) {
-						opobj.DN = opobj.CB * (opobj.res - opobj.prob)
+					opobj.expect = this.getExpect(opobj.CB * opobj.DR, opobj.DSR)
+					Disp += opobj.CBsq * opobj.expect * (1 - opobj.expect);
+					if (opobj.hasOwnProperty("result")) {
+						opobj.DN = opobj.CB * (opobj.result - opobj.expect)
 						DN += opobj.DN;
+						player.gamesAmount++;
 					} else {
-						opobj.DN0 = - opobj.CB * opobj.prob;
-						opobj.DN1 = opobj.CB * (1 - opobj.prob);
+						opobj.DN0 = - opobj.CB * opobj.expect;
+						opobj.DN1 = opobj.CB * (1 - opobj.expect);
 					}
 				}
-				ResC = player.MaxDev / (Math.pow(player.MaxDev / player.Dev0, 2) + Disp);
-				if (ResC < 10)
-					player.CDin = 10;
-				else
-					player.CDin = ResC;
-				player.RatingF = player.Rating0 + DN * player.CDin;
+				player.CDyn = player.MaxDev / (Math.pow(player.MaxDev / player.Dev0, 2) + Disp);
+				if (player.CDyn < 10)
+					player.CDyn = 10;
+				player.RatingF = player.Rating0 + DN * player.CDyn;
 			}
 		}
 	];
